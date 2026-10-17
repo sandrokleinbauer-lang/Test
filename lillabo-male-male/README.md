@@ -34,16 +34,16 @@ Offizielle Einzelmaße veröffentlicht IKEA nicht. Die Werte stammen aus dem BRI
 |---|---|---|
 | Breite × Höhe | 40 × 12 mm | BRIO-Standard (woodenrailway.info) |
 | Rillen | 6 mm breit, 3 mm tief, Mittenabstand 26 mm | BRIO-Standard, im Foto bestätigt (Rillenmitte ±13 mm) |
-| Länge gerade (ohne Zapfen) | **162 mm** | Foto gemessen: 161–163 mm |
+| Länge gerade (ohne Zapfen) | **150 mm** | an der Lillabo-Schiene nachgemessen |
 | Kurve | 45° (8 Stück = Kreis), Radius Mitte **202,5 mm**, innen 182,5 / außen 222,5 mm | BRIO-„E“-Kurve (Mitte ≈ 202 mm), passt zu Fremdkurven „8 Stück = Innendurchmesser 36,5 cm“ und zur Foto-Proportion |
 | Zapfenkopf | Ø 11,5 mm | BRIO 11,5 mm, Foto 11,4 mm |
 | Zapfenhals | 6,5 mm breit | Foto 6,3 mm, für mehr Festigkeit leicht verbreitert. Die Lochöffnung der Lillabo-Schiene ist ca. 7,6 mm breit |
-| Zapfenlänge gesamt | 18,0 mm ab Stirnfläche | Foto 18,4 mm, Lochtiefe ca. 19 mm |
+| Zapfenlänge gesamt | **17,0 mm** ab Stirnfläche | an der Lillabo-Schiene nachgemessen, Lochtiefe ca. 19 mm |
 | Loch der Lillabo-Schiene (zum Vergleich) | Ø ca. 13,5 mm | Foto. Gut 2 mm Spiel zum Zapfen, so wie bei BRIO üblich |
 
 Kanten: oben 1 mm Fase, unten 0,5 mm Fase (gegen Elefantenfuß), Rillenkanten 0,5 mm Fase, Rillengrund mit 1 mm Rundung, Zapfenoberkante 0,8 mm Fase.
 
-**Bitte einmal nachmessen:** gerade Lillabo-Schiene mit dem Zollstock ohne Zapfen. Liegt sie nicht bei 162 mm, `LaengeGerade` anpassen. Durch das Spiel in den Verbindungen sind ±2 mm unkritisch.
+Gerade Länge und Zapfenlänge sind an der echten Schiene nachgemessen. Weitere Anpassungen über das Tabellenblatt **Parameter** (`LaengeGerade`, `ZapfenLaenge` usw.).
 
 ---
 
