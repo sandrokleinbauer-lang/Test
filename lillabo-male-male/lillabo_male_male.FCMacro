@@ -1,0 +1,197 @@
+# -*- coding: utf-8 -*-
+# Lillabo/BRIO-kompatible Holzeisenbahn-Schienen mit zwei Zapfen (Stecker/Stecker)
+#
+# Erzeugt eine gerade Schiene und eine 45-Grad-Kurve, jeweils mit einem
+# männlichen Anschluss an beiden Enden. Damit werden die kleinen Kunststoff-
+# Verbinder (Knochen) überflüssig.
+#
+# Benutzung in FreeCAD:
+#   Makro -> Makros... -> diese Datei auswählen -> Ausführen
+#   Die Maße stehen im Tabellenblatt "Parameter". Wert ändern, Makro erneut
+#   ausführen, die Körper werden neu aufgebaut.
+#
+# Koordinaten: x = Fahrtrichtung, y = quer, z = oben. Unterseite liegt auf z = 0.
+
+import math
+
+import FreeCAD as App
+import Part
+
+V = App.Vector
+
+# Name, Wert, Beschreibung. Werte in mm bzw. Grad.
+DEFAULTS = [
+    ("Breite", 40.0, "Schienenbreite"),
+    ("Hoehe", 12.0, "Schienenhöhe"),
+    ("RilleAbstand", 26.0, "Abstand der Rillenmitten"),
+    ("RilleBreite", 6.0, "Rillenbreite"),
+    ("RilleTiefe", 3.0, "Rillentiefe"),
+    ("RilleRadius", 1.0, "Rundung im Rillengrund"),
+    ("FaseOben", 1.0, "Fase an den oberen Außenkanten"),
+    ("FaseUnten", 0.5, "Fase an den unteren Außenkanten (gegen Elefantenfuß)"),
+    ("FaseRille", 0.5, "Fase an den Rillenkanten"),
+    ("LaengeGerade", 162.0, "Länge der geraden Schiene ohne Zapfen"),
+    ("KurveRadius", 202.5, "Radius der Kurve auf Schienenmitte"),
+    ("KurveWinkel", 45.0, "Winkel der Kurve (8 Kurven = Kreis)"),
+    ("ZapfenLaenge", 18.0, "Zapfen gesamt, von Stirnfläche bis Kopfspitze"),
+    ("ZapfenKopfD", 11.5, "Durchmesser Zapfenkopf"),
+    ("ZapfenHalsB", 6.5, "Breite Zapfenhals"),
+    ("ZapfenHoehe", 12.0, "Höhe des Zapfens ab Unterseite"),
+    ("ZapfenFase", 0.8, "Fase oben am Zapfen"),
+]
+
+
+def get_params(doc):
+    sheet = doc.getObject("Parameter")
+    if sheet is None:
+        sheet = doc.addObject("Spreadsheet::Sheet", "Parameter")
+        sheet.set("A1", "Parameter")
+        sheet.set("B1", "Wert")
+        sheet.set("C1", "Beschreibung")
+        for i, (name, value, desc) in enumerate(DEFAULTS, start=2):
+            sheet.set("A%d" % i, name)
+            sheet.set("B%d" % i, str(value))
+            sheet.set("C%d" % i, desc)
+            sheet.setAlias("B%d" % i, name)
+        doc.recompute()
+    p = {}
+    for name, value, _ in DEFAULTS:
+        try:
+            p[name] = float(sheet.get(name))
+        except Exception:
+            p[name] = value
+    return p
+
+
+def arc(center, r, a_from, a_to):
+    """Viertelkreis-Bogen in der (y,z)-Ebene, Winkel in Grad."""
+    a_mid = math.radians((a_from + a_to) / 2.0)
+    a0, a1 = math.radians(a_from), math.radians(a_to)
+    pt = lambda a: V(0, center[0] + r * math.cos(a), center[1] + r * math.sin(a))
+    return Part.Arc(pt(a0), pt(a_mid), pt(a1)).toShape()
+
+
+def profile_face(p):
+    """Querschnitt in der (y,z)-Ebene bei x = 0, symmetrisch zu y = 0."""
+    w2 = p["Breite"] / 2.0
+    h = p["Hoehe"]
+    ct, cb, cg = p["FaseOben"], p["FaseUnten"], p["FaseRille"]
+    gc = p["RilleAbstand"] / 2.0
+    gw2 = p["RilleBreite"] / 2.0
+    gz = h - p["RilleTiefe"]
+    rf = p["RilleRadius"]
+    go, gi = gc + gw2, gc - gw2  # äußere und innere Rillenkante
+
+    def half(s):
+        """Kontur einer Seite (s = +1 rechts, s = -1 links) von unten außen bis Mitte oben."""
+        e = []
+        pts = [(s * (w2 - cb), 0), (s * w2, cb), (s * w2, h - ct), (s * (w2 - ct), h),
+               (s * (go + cg), h), (s * go, h - cg), (s * go, gz + rf)]
+        for a, b in zip(pts, pts[1:]):
+            e.append(Part.LineSegment(V(0, *a), V(0, *b)).toShape())
+        # Rillengrund mit zwei Rundungen
+        if s > 0:
+            e.append(arc((go - rf, gz + rf), rf, 0, -90))
+        else:
+            e.append(arc((-go + rf, gz + rf), rf, 180, 270))
+        pts = [(s * (go - rf), gz), (s * (gi + rf), gz)]
+        e.append(Part.LineSegment(V(0, *pts[0]), V(0, *pts[1])).toShape())
+        if s > 0:
+            e.append(arc((gi + rf, gz + rf), rf, 270, 180))
+        else:
+            e.append(arc((-gi - rf, gz + rf), rf, -90, 0))
+        pts = [(s * gi, gz + rf), (s * gi, h - cg), (s * (gi - cg), h), (0, h)]
+        for a, b in zip(pts, pts[1:]):
+            e.append(Part.LineSegment(V(0, *a), V(0, *b)).toShape())
+        return e
+
+    right = half(+1)
+    left = [ed.reversed() for ed in reversed(half(-1))]
+    bottom = Part.LineSegment(V(0, -(w2 - cb), 0), V(0, w2 - cb, 0)).toShape()
+    wire = Part.Wire(Part.__sortEdges__([bottom] + right + left))
+    return Part.Face(wire)
+
+
+def peg(p):
+    """Zapfen, der in +x aus einer Stirnfläche bei x = 0 herausragt (Mitte y = 0)."""
+    r = p["ZapfenKopfD"] / 2.0
+    cx = p["ZapfenLaenge"] - r
+    hb2 = p["ZapfenHalsB"] / 2.0
+    h = p["ZapfenHoehe"]
+    overlap = 2.0  # ragt in den Schienenkörper hinein, damit die Vereinigung sauber ist
+    neck = Part.makeBox(cx + overlap, 2 * hb2, h, V(-overlap, -hb2, 0))
+    head = Part.makeCylinder(r, h, V(cx, 0, 0))
+    solid = neck.fuse(head).removeSplitter()
+    c = p["ZapfenFase"]
+    if c > 0:
+        top_edges = [e for e in solid.Edges
+                     if abs(e.BoundBox.ZMin - h) < 1e-6 and abs(e.BoundBox.ZMax - h) < 1e-6
+                     and e.BoundBox.XMax > -overlap + 1e-6]
+        try:
+            solid = solid.makeChamfer(c, top_edges)
+        except Part.OCCError:
+            App.Console.PrintWarning("Zapfenfase nicht möglich, Zapfen ohne Fase\n")
+    return solid
+
+
+def place(shape, x, y, angle_deg):
+    s = shape.copy()
+    s.rotate(V(0, 0, 0), V(0, 0, 1), angle_deg)
+    s.translate(V(x, y, 0))
+    return s
+
+
+def straight(p):
+    L = p["LaengeGerade"]
+    body = profile_face(p).extrude(V(L, 0, 0))
+    pg = peg(p)
+    shape = body.fuse([place(pg, L, 0, 0), place(pg, 0, 0, 180)]).removeSplitter()
+    return shape
+
+
+def curve(p):
+    R = p["KurveRadius"]
+    a = p["KurveWinkel"]
+    face = profile_face(p)
+    # Querschnitt von der (y,z)-Ebene in die (x,z)-Ebene bei x = R legen
+    face.rotate(V(0, 0, 0), V(0, 0, 1), -90)
+    face.translate(V(R, 0, 0))
+    body = face.revolve(V(0, 0, 0), V(0, 0, 1), a)
+    pg = peg(p)
+    ar = math.radians(a)
+    start = place(pg, R, 0, -90)  # Fahrtrichtung am Anfang ist +y, Zapfen zeigt nach -y
+    end = place(pg, R * math.cos(ar), R * math.sin(ar), a + 90)
+    shape = body.fuse([start, end]).removeSplitter()
+    # Kurve so drehen, dass sie symmetrisch zur x-Achse liegt (schöner auf der Druckplatte)
+    shape.rotate(V(0, 0, 0), V(0, 0, 1), -a / 2.0)
+    shape.translate(V(-R, 0, 0))
+    return shape
+
+
+def build(doc):
+    p = get_params(doc)
+    result = {}
+    for name, fn, color in (("Gerade_MM", straight, (0.85, 0.70, 0.50)),
+                            ("Kurve_MM", curve, (0.80, 0.65, 0.45))):
+        shape = fn(p)
+        if not shape.isValid():
+            App.Console.PrintWarning("%s: Geometrie ungültig\n" % name)
+        obj = doc.getObject(name) or doc.addObject("Part::Feature", name)
+        obj.Shape = shape
+        if App.GuiUp:
+            obj.ViewObject.ShapeColor = color
+        result[name] = (obj, shape)
+    # Kurve neben die Gerade legen, damit beide im Bild sind
+    kurve = result["Kurve_MM"][0]
+    kurve.Placement = App.Placement(V(0, 80, 0), App.Rotation()).multiply(kurve.Placement)
+    doc.recompute()
+    return result
+
+
+if __name__ == "__main__":
+    document = App.ActiveDocument or App.newDocument("Lillabo_Stecker_Stecker")
+    build(document)
+    if App.GuiUp:
+        import FreeCADGui
+        FreeCADGui.SendMsgToActiveView("ViewFit")
+        FreeCADGui.activeDocument().activeView().viewIsometric()
